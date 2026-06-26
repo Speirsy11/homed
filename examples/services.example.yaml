@@ -1,0 +1,79 @@
+services:
+  jellyfin:
+    driver: manual
+    description: Media server managed outside homed
+    intent: always
+    exposure: lan
+    health:
+      kind: http
+      url: http://127.0.0.1:8096/
+      expect_status: 200
+      timeout_seconds: 2
+    tags: [media]
+
+  adguard:
+    driver: docker
+    description: DNS and ad-blocking service
+    intent: always
+    exposure: lan
+    options:
+      container: adguardhome
+    health:
+      kind: tcp
+      host: 127.0.0.1
+      port: 3000
+    tags: [network]
+
+  dashboard:
+    driver: screen
+    description: Static homelab dashboard
+    intent: always
+    exposure: lan
+    options:
+      session: homelab-dashboard
+      start: start-homelab-dashboard
+    health:
+      kind: http
+      url: http://127.0.0.1:8081/
+    logs:
+      path: ~/.local/state/homed/dashboard.log
+
+  daily-briefing:
+    driver: launchd
+    description: Scheduled daily briefing job
+    intent: cron
+    exposure: loopback
+    options:
+      label: local.daily-briefing
+    health:
+      kind: last_success
+      path: ~/.local/state/homed/daily-briefing.last-success
+      max_age_seconds: 172800
+
+  minecraft:
+    driver: docker
+    description: Selected game server
+    intent: selected
+    exposure: lan
+    mode_group: game-server
+    conflicts: [terraria]
+    options:
+      container: minecraft
+    health:
+      kind: tcp
+      host: 127.0.0.1
+      port: 25565
+
+  terraria:
+    driver: docker
+    description: Alternate selected game server
+    intent: selected
+    exposure: lan
+    mode_group: game-server
+    conflicts: [minecraft]
+    options:
+      container: terraria
+    health:
+      kind: tcp
+      host: 127.0.0.1
+      port: 7777

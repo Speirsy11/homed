@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "homed"
+version = "0.1.0"
+description = "A small declarative service control layer for Mac mini homelabs."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Charlie Speirs" }]
+dependencies = []
+
+[project.scripts]
+homed = "homed.cli:main"

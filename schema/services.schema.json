@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "homed services config",
+  "type": "object",
+  "required": ["services"],
+  "properties": {
+    "services": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["driver"],
+        "properties": {
+          "driver": { "enum": ["docker", "launchd", "screen", "process", "manual"] },
+          "description": { "type": "string" },
+          "intent": { "enum": ["always", "manual", "selected", "cron", "external"] },
+          "exposure": { "enum": ["loopback", "lan", "tailscale", "public"] },
+          "mode_group": { "type": ["string", "null"] },
+          "after": { "type": "array", "items": { "type": "string" } },
+          "requires": { "type": "array", "items": { "type": "string" } },
+          "conflicts": { "type": "array", "items": { "type": "string" } },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "options": { "type": "object" },
+          "logs": { "type": "object" },
+          "health": {
+            "type": "object",
+            "properties": {
+              "kind": { "enum": ["http", "tcp", "command", "last_success", "none"] },
+              "url": { "type": "string" },
+              "expect_status": { "type": "integer" },
+              "host": { "type": "string" },
+              "port": { "type": "integer" },
+              "command": {
+                "oneOf": [
+                  { "type": "string" },
+                  { "type": "array", "items": { "type": "string" } }
+                ]
+              },
+              "path": { "type": "string" },
+              "max_age_seconds": { "type": "integer" },
+              "timeout_seconds": { "type": "number" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
