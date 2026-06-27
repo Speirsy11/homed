@@ -12,7 +12,8 @@ from homed import config, registry, server, yamlloader
 from homed.cli import main
 from homed.doctor import inspect
 from homed.drivers.docker import DockerDriver
-from homed.model import Driver, Exposure, HealthState, Intent, ManagerState
+from homed.drivers.launchd import LaunchdDriver
+from homed.model import Driver, Exposure, HealthCheck, HealthState, Intent, ManagerState, Service, ServiceStatus
 from homed.health.last_success import check_last_success
 from homed.sanitize import REDACTED, sanitize_registry
 
@@ -81,6 +82,24 @@ class DriverTests(unittest.TestCase):
         self.assertEqual(result.state, ManagerState.RUNNING)
         self.assertEqual(runner.calls[0][:3], ["docker", "inspect", "-f"])
 
+    def test_launchd_cron_intent_returns_scheduled(self):
+        runner = FakeRunner(stdout="state = not running\n\tlast exit code = 0\n")
+        svc = registry.build_service(
+            "daily-briefing",
+            {"driver": "launchd", "intent": "cron", "options": {"label": "local.daily-briefing"}},
+        )
+        result = LaunchdDriver(runner).status(svc)
+        self.assertEqual(result.state, ManagerState.SCHEDULED)
+
+    def test_launchd_always_intent_returns_stopped(self):
+        runner = FakeRunner(stdout="state = not running\n\tlast exit code = 0\n")
+        svc = registry.build_service(
+            "always-job",
+            {"driver": "launchd", "intent": "always", "options": {"label": "local.always"}},
+        )
+        result = LaunchdDriver(runner).status(svc)
+        self.assertEqual(result.state, ManagerState.STOPPED)
+
 
 class HealthTests(unittest.TestCase):
     def test_last_success_degraded_when_old(self):
@@ -97,6 +116,57 @@ class DoctorTests(unittest.TestCase):
         issues = inspect(reg)
         self.assertEqual(issues[0].level, "warning")
         self.assertIn("no health", issues[0].message)
+
+
+class StatusTests(unittest.TestCase):
+    def _status(self, manager, intent, health_kind=HealthState.HEALTHY):
+        return ServiceStatus(
+            name="svc",
+            driver=Driver.LAUNCHD,
+            intent=intent,
+            exposure=Exposure.LOOPBACK,
+            manager_state=manager,
+            health_state=health_kind,
+        )
+
+    def test_cron_scheduled_with_healthy_health_is_ok(self):
+        self.assertTrue(
+            self._status(ManagerState.SCHEDULED, Intent.CRON, HealthState.HEALTHY).ok
+        )
+
+    def test_cron_scheduled_with_unhealthy_health_is_not_ok(self):
+        self.assertFalse(
+            self._status(ManagerState.SCHEDULED, Intent.CRON, HealthState.UNHEALTHY).ok
+        )
+
+    def test_cron_scheduled_with_no_health_is_ok(self):
+        self.assertTrue(
+            self._status(ManagerState.SCHEDULED, Intent.CRON, HealthState.NOT_CHECKED).ok
+        )
+
+    def test_always_scheduled_is_not_ok(self):
+        # An always-on service that the manager reports as scheduled (no
+        # longer firing) is not "ok" — the dashboard should flag it.
+        self.assertFalse(
+            self._status(ManagerState.SCHEDULED, Intent.ALWAYS, HealthState.HEALTHY).ok
+        )
+
+    def test_always_unknown_manager_with_healthy_health_is_ok(self):
+        # Manual / externally-managed services report UNKNOWN manager state
+        # by design. The health check is the source of truth.
+        self.assertTrue(
+            self._status(ManagerState.UNKNOWN, Intent.ALWAYS, HealthState.HEALTHY).ok
+        )
+
+    def test_always_stopped_is_not_ok(self):
+        self.assertFalse(
+            self._status(ManagerState.STOPPED, Intent.ALWAYS, HealthState.HEALTHY).ok
+        )
+
+    def test_always_not_found_is_not_ok(self):
+        self.assertFalse(
+            self._status(ManagerState.NOT_FOUND, Intent.ALWAYS, HealthState.HEALTHY).ok
+        )
 
 
 class CliTests(unittest.TestCase):

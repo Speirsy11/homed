@@ -167,6 +167,7 @@ body {
 .svc.ok { border-left-color: var(--ok); }
 .svc.bad { border-left-color: var(--bad); }
 .svc.warn { border-left-color: var(--warn); }
+.svc.scheduled { border-left-color: var(--accent); }
 .svc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .svc-name { font-weight: 600; font-size: 14px; }
 .svc-driver { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
@@ -189,6 +190,7 @@ body {
 .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--unknown); }
 .badge.s-running::before, .badge.h-healthy::before { background: var(--ok); }
 .badge.s-stopped::before, .badge.s-not_found::before, .badge.h-unhealthy::before, .badge.s-error::before { background: var(--bad); }
+.badge.s-scheduled::before { background: var(--accent); }
 .badge.h-degraded::before { background: var(--warn); }
 .badge.h-not_checked::before, .badge.s-unknown::before, .badge.h-unknown::before { background: var(--unknown); }
 .badge.muted { color: var(--text-faint); }
