@@ -38,7 +38,34 @@ homed init
 homed config path
 homed config validate
 homed registry dump --json
+homed serve
 ```
+
+## Dashboard
+
+`homed serve` starts a small read-only web dashboard:
+
+```bash
+homed serve              # http://127.0.0.1:8765 (loopback-only)
+homed serve --open       # also open a browser
+homed serve --port 9000
+homed serve --host 0.0.0.0   # opt in to LAN exposure (prints a warning)
+```
+
+The dashboard shows every declared service as a scannable grid, with manager
+state and health state as separate badges, filters by intent/exposure/driver, a
+doctor panel, and a per-service detail drawer. It is deliberately read-only: it
+exposes no `up`/`down`/`restart` routes and never mutates anything.
+
+It is a presentation layer over the same JSON the CLI emits:
+
+- `GET /api/status` — same shape as `homed status --json`
+- `GET /api/registry` — registry dump with secret-looking values redacted
+- `GET /api/doctor` — same shape as `homed doctor --json`
+- `GET /api/meta` — active config path, version, service count
+
+Binds to `127.0.0.1` by default; pass `--host` only if you deliberately want it
+reachable beyond loopback.
 
 The committed `examples/services.example.yaml` is sanitized. It uses public,
 well-known service names and loopback URLs. Put machine-specific paths, host
@@ -57,6 +84,7 @@ homed doctor
 homed config path
 homed config validate
 homed registry dump --json
+homed serve
 ```
 
 ## Service Model

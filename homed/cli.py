@@ -64,6 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
     init = sub.add_parser("init", help="create a local services.yaml from the example")
     init.add_argument("--force", action="store_true")
     init.set_defaults(func=cmd_init)
+
+    serve = sub.add_parser("serve", help="run the read-only local dashboard")
+    serve.add_argument("--host", default=None, help="bind host (default 127.0.0.1; loopback-only)")
+    serve.add_argument("--port", type=int, default=None, help="bind port (default 8765)")
+    serve.add_argument("--open", action="store_true", dest="open_browser", help="open a browser window")
+    serve.set_defaults(func=cmd_serve)
     return parser
 
 
@@ -163,6 +169,17 @@ def cmd_init(args: argparse.Namespace) -> int:
     path = config.init_config(_path(args), force=args.force)
     print(f"created {path}")
     return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    from . import server
+
+    return server.serve(
+        host=args.host or server.DEFAULT_HOST,
+        port=args.port or server.DEFAULT_PORT,
+        config_path=_path(args),
+        open_browser=args.open_browser,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>homed</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">homed</span>
+      <span class="tagline">local service control</span>
+    </div>
+    <div class="meta">
+      <span id="config-path" class="config-path" title="active config path"></span>
+      <button id="refresh" class="btn" type="button" title="Refresh (r)">Refresh</button>
+      <span id="updated" class="updated"></span>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <section class="summary" id="summary" aria-label="summary"></section>
+
+  <main class="layout">
+    <div class="services-pane">
+      <div class="toolbar">
+        <input id="search" class="search" type="search" placeholder="Filter services…" autocomplete="off" />
+        <div class="filters" id="filters"></div>
+      </div>
+      <div id="services" class="services" aria-live="polite"></div>
+    </div>
+
+    <aside class="doctor-pane">
+      <h2 class="pane-title">Doctor</h2>
+      <div id="doctor" class="doctor"></div>
+    </aside>
+  </main>
+
+  <div id="drawer" class="drawer" hidden>
+    <div class="drawer-backdrop" data-close></div>
+    <div class="drawer-panel" role="dialog" aria-modal="true" aria-label="service detail">
+      <button class="drawer-close" type="button" data-close aria-label="Close">×</button>
+      <div id="drawer-body"></div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <span>read-only dashboard</span>
+    <span id="version"></span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

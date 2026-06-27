@@ -14,3 +14,9 @@ dependencies = []
 
 [project.scripts]
 homed = "homed.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["homed*"]
+
+[tool.setuptools.package-data]
+homed = ["web/*.html", "web/*.css", "web/*.js"]
