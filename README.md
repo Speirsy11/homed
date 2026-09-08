@@ -1,114 +1,58 @@
 # homed
 
-`homed` is a small declarative control layer for Mac mini homelabs.
+A small declarative control layer and private dashboard for a Mac homelab. Docker, launchd, screen and existing service managers own the processes; homed supplies one registry, a CLI and a browser view.
 
-It is intentionally not a process manager. Docker, launchd, screen, shell
-scripts, and cron-like jobs remain the real managers. `homed` gives them a
-single registry, one CLI surface, consistent JSON output, and a place for
-doctor checks.
+The dashboard combines live service observations with an editable personal calendar. Systems status and calendar data require sign-in. It works at desktop and phone sizes, and serves its calendar assets locally.
 
-## Design
+## Install and configure
 
-- CLI code does not shell out directly.
-- Drivers talk to real managers, but never parse config.
-- Health checks report health only; they never start or stop services.
-- Manager state and health state are separate.
-- The real service registry is private and gitignored.
-- The public repo carries examples and schema, not local topology.
+Requires Python 3.9 or later.
 
-## Config
-
-The default config path is:
-
-```bash
-~/.config/homed/services.yaml
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/homed init
+.venv/bin/homed account create YOUR_USERNAME
+.venv/bin/homed serve
 ```
 
-Override it with:
+Open `http://127.0.0.1:8765`. Account creation prompts privately for a passphrase; there are no default credentials. Routine calendar entry and service visibility work in the browser.
 
-```bash
-HOMED_CONFIG=/path/to/services.yaml homed status
-homed --config /path/to/services.yaml status
-```
+The private registry defaults to `~/.config/homed/services.yaml`. Override it with `HOMED_CONFIG` or `--config PATH`. Small private databases default to `dashboard/` beside the registry; both `serve` and `account create` accept `--state-dir`.
 
-Create a local starter config:
-
-```bash
-homed init
-homed config path
-homed config validate
-homed registry dump --json
-homed serve
-```
+LAN and Tailscale listeners require a trusted TLS certificate and explicit browser origins. See [dashboard setup, scope and recovery](docs/dashboard.md). Existing deployment launchers are not automatically changed.
 
 ## Dashboard
 
-`homed serve` starts a small read-only web dashboard:
+- Overview, searchable service details, separate manager/health state, observed times and explicit stale/unavailable data.
+- Activity from observed changes and registry routines, with unknown schedule/history marked clearly.
+- Local mounted storage capacity and backup limitations.
+- Personal calendar with day/week/month/agenda views, all-day occasions, recurrence, forms, dragging, optimistic edits and versioned export/restore.
+- Private sessions, account-scoped events, protected writes and bounded declared logs.
 
-```bash
-homed serve              # http://127.0.0.1:8765 (loopback-only)
-homed serve --open       # also open a browser
-homed serve --port 9000
-homed serve --host 0.0.0.0   # opt in to LAN exposure (prints a warning)
-```
+Work Outlook import and service lifecycle buttons are later work. This release does not change Discord routing or supervise services. Additional dashboard accounts are administrators with separate personal calendars; it is not a general shared portal.
 
-The dashboard shows every declared service as a scannable grid, with manager
-state and health state as separate badges, filters by intent/exposure/driver, a
-doctor panel, and a per-service detail drawer. It is deliberately read-only: it
-exposes no `up`/`down`/`restart` routes and never mutates anything.
+## Registry and CLI
 
-It is a presentation layer over the same JSON the CLI emits:
+Services declare `driver`, `intent`, `exposure`, `health` and optional dependencies, tags, `web_url`, `logs.path` and driver-specific `options`. Manager state and functional health remain separate. An HTTP health endpoint is not automatically an app link. The public [example](examples/services.example.yaml) and [schema](schema/services.schema.json) contain no local topology.
 
-- `GET /api/status` — same shape as `homed status --json`
-- `GET /api/registry` — registry dump with secret-looking values redacted
-- `GET /api/doctor` — same shape as `homed doctor --json`
-- `GET /api/meta` — active config path, version, service count
-
-Binds to `127.0.0.1` by default; pass `--host` only if you deliberately want it
-reachable beyond loopback.
-
-The committed `examples/services.example.yaml` is sanitized. It uses public,
-well-known service names and loopback URLs. Put machine-specific paths, host
-names, labels, and local topology in your private config file.
-
-## Commands
-
-```bash
-homed status
+```sh
 homed status --json
-homed up adguard
-homed down adguard
-homed restart dashboard
-homed logs dashboard
 homed doctor
-homed config path
+homed up SERVICE
+homed down SERVICE
+homed restart SERVICE
+homed logs SERVICE
 homed config validate
 homed registry dump --json
-homed serve
 ```
 
-## Service Model
-
-Each service has:
-
-- `driver`: `docker`, `launchd`, `screen`, `process`, or `manual`
-- `intent`: `always`, `manual`, `selected`, `cron`, or `external`
-- `exposure`: `loopback`, `lan`, `tailscale`, or `public`
-- `health`: `http`, `tcp`, `command`, `last_success`, or `none`
-- optional `after`, `requires`, `conflicts`, `mode_group`, `tags`, `logs`, and
-  driver-specific `options`
-
-## Limitations
-
-This MVP is conservative. It does not install launchd plists, generate Docker
-Compose files, or supervise processes. `up` and `down` ask the underlying
-manager for the single obvious action. That keeps the code inspectable and
-prevents `homed` from becoming a second, worse init system.
+Lifecycle commands remain CLI-only. The web server exposes authenticated `GET /api/dashboard`, historical status/registry/doctor/meta routes, session and personal-calendar APIs. See the [delivery contract](docs/dashboard.md).
 
 ## Development
 
-Run tests:
-
-```bash
-python3 -m unittest
+```sh
+.venv/bin/python -m unittest
 ```
+
+Tests cover authentication, HTTP access control, observation ageing, calendar persistence, restore conflicts and London daylight-saving behavior. Frontend assets are committed under `homed/web/vendor` with licenses and a source/hash manifest; there is no frontend runtime build step.

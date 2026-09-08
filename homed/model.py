@@ -87,6 +87,7 @@ class ManagerState(_StrEnum):
 
     RUNNING = "running"
     STOPPED = "stopped"
+    SCHEDULED = "scheduled"  # cron-style job: loaded by its manager, not currently firing
     NOT_FOUND = "not_found"  # the manager has no record of this unit
     UNKNOWN = "unknown"  # could not be determined (e.g. manager unavailable)
     ERROR = "error"  # the manager reported an error state
@@ -154,6 +155,7 @@ class Service:
     name: str
     driver: Driver
     description: str = ""
+    web_url: Optional[str] = None
     intent: Intent = Intent.MANUAL
     exposure: Exposure = Exposure.LOOPBACK
     health: HealthCheck = field(default_factory=HealthCheck)
@@ -170,6 +172,7 @@ class Service:
             "name": self.name,
             "driver": self.driver.value,
             "description": self.description,
+            "web_url": self.web_url,
             "intent": self.intent.value,
             "exposure": self.exposure.value,
             "health": self.health.to_dict(),
@@ -200,21 +203,37 @@ class ServiceStatus:
         """Whether the service looks healthy enough to leave alone."""
         if self.intent in (Intent.MANUAL, Intent.EXTERNAL, Intent.CRON):
             # These are not expected to be continuously up; "ok" just means
-            # nothing is actively broken.
-            return self.manager_state is not ManagerState.ERROR and (
-                self.health_state
-                in (
+            # nothing is actively broken. SCHEDULED is the expected idle
+            # state for cron-style jobs between fires.
+            if self.manager_state is ManagerState.ERROR:
+                return False
+            if self.manager_state is ManagerState.SCHEDULED:
+                return self.health_state in (
                     HealthState.HEALTHY,
                     HealthState.NOT_CHECKED,
                     HealthState.UNKNOWN,
                 )
+            return self.health_state in (
+                HealthState.HEALTHY,
+                HealthState.NOT_CHECKED,
+                HealthState.UNKNOWN,
             )
-        running = self.manager_state is ManagerState.RUNNING
-        healthy = self.health_state in (
+        # For always-on services, RUNNING is the expected manager state, but
+        # UNKNOWN is acceptable when homed observes the service rather than
+        # managing it (e.g. the manual driver). The health check is the
+        # source of truth in that case. SCHEDULED is only valid for cron
+        # intent; for an always-on service it means something is wrong.
+        if self.manager_state in (
+            ManagerState.NOT_FOUND,
+            ManagerState.ERROR,
+            ManagerState.STOPPED,
+            ManagerState.SCHEDULED,
+        ):
+            return False
+        return self.health_state in (
             HealthState.HEALTHY,
             HealthState.NOT_CHECKED,
         )
-        return running and healthy
 
     def to_dict(self) -> Dict[str, Any]:
         return {

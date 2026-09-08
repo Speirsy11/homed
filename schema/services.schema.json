@@ -12,6 +12,7 @@
         "properties": {
           "driver": { "enum": ["docker", "launchd", "screen", "process", "manual"] },
           "description": { "type": "string" },
+          "web_url": { "type": ["string", "null"] },
           "intent": { "enum": ["always", "manual", "selected", "cron", "external"] },
           "exposure": { "enum": ["loopback", "lan", "tailscale", "public"] },
           "mode_group": { "type": ["string", "null"] },

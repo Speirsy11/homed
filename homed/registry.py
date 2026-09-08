@@ -94,6 +94,7 @@ def build_service(name: str, spec: Dict[str, Any]) -> Service:
         name=name,
         driver=driver,
         description=str(spec.get("description", "") or ""),
+        web_url=spec.get("web_url"),
         intent=intent,
         exposure=exposure,
         health=build_health(name, spec.get("health")),

@@ -5,8 +5,8 @@ orchestration layer that knows how to *ask* the real managers (launchd, Docker
 / OrbStack, screen sessions, plain processes, cron-style jobs) about state and
 how to drive them up/down/restart in a uniform way.
 
-The package is intentionally dependency-light: it runs on the Python standard
-library alone. See ``README.md`` for the design philosophy.
+The native Python dashboard adds pinned cryptography and calendar recurrence
+dependencies. See ``README.md`` for installation and the deployment contract.
 """
 
 __version__ = "0.1.0"

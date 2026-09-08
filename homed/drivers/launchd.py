@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 
-from ..model import ManagerState, Service
+from ..model import Intent, ManagerState, Service
 from .base import BaseDriver, DriverResult, command_detail
 
 
@@ -22,6 +22,11 @@ class LaunchdDriver(BaseDriver):
         text = proc.stdout or ""
         if "state = running" in text or "pid =" in text:
             return DriverResult(ManagerState.RUNNING, "launchd reports running")
+        # Cron-style jobs sit in "not running" between fires. That is the
+        # expected idle state, distinct from a service that should be up
+        # but isn't.
+        if service.intent is Intent.CRON:
+            return DriverResult(ManagerState.SCHEDULED, "scheduled; awaiting next fire")
         return DriverResult(ManagerState.STOPPED, "launchd job exists but is not running")
 
     def up(self, service: Service) -> DriverResult:

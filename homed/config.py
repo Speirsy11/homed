@@ -173,6 +173,16 @@ def _validate_service(name: str, spec: Any, names: set, issues: List[Issue]) -> 
         issues.append(Issue("error", where, "service definition must be a mapping"))
         return
 
+    web_url = spec.get("web_url")
+    if web_url is not None:
+        from urllib.parse import urlsplit
+        try:
+            parsed = urlsplit(web_url) if isinstance(web_url, str) else None
+            if not parsed or parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+                raise ValueError()
+        except ValueError:
+            issues.append(Issue("error", f"{where}.web_url", "must be an HTTP(S) app URL without credentials, query or fragment"))
+
     driver = spec.get("driver")
     if driver is None:
         issues.append(Issue("error", f"{where}.driver", "missing required 'driver'"))
