@@ -82,6 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--open", action="store_true", dest="open_browser", help="open a browser window")
     serve.add_argument("--state-dir", type=Path, help="private databases (default: dashboard/ beside the registry)")
     serve.add_argument("--origin", action="append", dest="origins", help="exact permitted browser origin, e.g. https://host:8765; repeat for LAN/Tailscale")
+    serve.add_argument("--proxy-origin", action="append", dest="proxy_origins", help="exact HTTPS origin for a loopback reverse proxy, e.g. https://host:8443; repeat as needed")
     serve.add_argument("--cert", type=Path, dest="certfile", help="TLS certificate; required beyond loopback")
     serve.add_argument("--key", type=Path, dest="keyfile", help="TLS private key")
     serve.set_defaults(func=cmd_serve)
@@ -196,6 +197,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         open_browser=args.open_browser,
         state_dir=args.state_dir,
         origins=args.origins,
+        proxy_origins=args.proxy_origins,
         certfile=args.certfile,
         keyfile=args.keyfile,
     )

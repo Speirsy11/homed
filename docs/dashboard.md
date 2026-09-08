@@ -27,7 +27,24 @@ homed serve --host 0.0.0.0 --port 8765 \
   --origin https://dashboard.example:8765
 ```
 
-Repeat `--origin` for other exact trusted addresses. Origins contain the scheme, hostname and optional port, with no trailing slash. HTTP is supported only on loopback for local development. Forwarded headers are not trusted; a reverse proxy must connect to the configured TLS listener. The application does not issue certificates, change trust stores, alter routers or publish itself.
+Repeat `--origin` for other exact trusted addresses. Origins contain the scheme, hostname and optional port, with no trailing slash. A native non-loopback listener requires TLS. Forwarded headers are not trusted. The application does not issue certificates, change trust stores, alter routers or publish itself.
+
+To keep homed on loopback HTTP while Tailscale Serve terminates trusted HTTPS,
+configure the public browser origin explicitly:
+
+```sh
+tailscale serve --bg --https=8443 http://127.0.0.1:8765
+homed serve --host 127.0.0.1 --port 8765 \
+  --proxy-origin https://dashboard.example.ts.net:8443
+```
+
+`--proxy-origin` is repeatable and accepts exact HTTPS origins, including the
+default port form `https://dashboard.example.ts.net`. It is rejected unless the
+native listener is loopback. Requests still require a configured `Host`, exact
+`Origin` on writes, the local account session, and its CSRF token. The server
+does not trust forwarded headers or Tailscale identity headers. Direct local
+HTTP remains available and receives a non-Secure cookie; requests using a
+configured HTTPS proxy host receive a Secure cookie.
 
 A single existing native service owner should run the final deployment. Preserve the prior launcher and checkout until verified replacement. Do not add a competing watchdog. The existing installation is untouched by the build checkout.
 

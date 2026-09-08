@@ -1,4 +1,5 @@
 import json
+import http.client
 import tempfile
 import threading
 import unittest
@@ -6,6 +7,7 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 from homed import server
+from homed.cli import build_parser
 
 
 class DashboardHTTPTests(unittest.TestCase):
@@ -112,6 +114,102 @@ class NetworkPolicyTests(unittest.TestCase):
     def test_external_listener_requires_tls_and_explicit_origins_before_binding(self):
         with self.assertRaisesRegex(ValueError,'requires TLS'):
             server.make_server(host='0.0.0.0',port=0)
+
+
+class ProxyOriginTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.config = Path(self.tmp.name) / 'services.yaml'
+        self.config.write_text('services:\n  fixture:\n    driver: manual\n')
+        self.proxy_origin = 'https://dashboard.example:8443'
+        self.httpd = server.make_server(
+            port=0, config_path=self.config, collect=False,
+            proxy_origins=[self.proxy_origin],
+        )
+        self.httpd.app.auth.create_account('fixture', 'a valid fixture passphrase')
+        self.port = self.httpd.server_address[1]
+        self.local_origin = f'http://127.0.0.1:{self.port}'
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+
+    def tearDown(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join()
+        self.tmp.cleanup()
+
+    def request(self, method, path, host, origin=None, body=None, cookie=None, csrf=None):
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
+        headers = {'Host': host}
+        if origin is not None:
+            headers['Origin'] = origin
+        if body is not None:
+            headers['Content-Type'] = 'application/json'
+        if cookie is not None:
+            headers['Cookie'] = cookie
+        if csrf is not None:
+            headers['X-CSRF-Token'] = csrf
+        connection.request(method, path, body=json.dumps(body) if body is not None else None, headers=headers)
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+        result = response.status, payload, response.headers
+        connection.close()
+        return result
+
+    def test_local_http_and_exact_https_proxy_origin_both_authenticate(self):
+        status, local_login, local_headers = self.request(
+            'POST', '/api/login', f'127.0.0.1:{self.port}', self.local_origin,
+            {'username': 'fixture', 'password': 'a valid fixture passphrase'},
+        )
+        self.assertEqual(status, 200)
+        self.assertNotIn('; Secure', local_headers['Set-Cookie'])
+        local_cookie = local_headers['Set-Cookie'].split(';')[0]
+        self.assertTrue(self.request('GET', '/api/session', f'127.0.0.1:{self.port}', cookie=local_cookie)[1]['authenticated'])
+
+        status, proxy_login, proxy_headers = self.request(
+            'POST', '/api/login', 'dashboard.example:8443', self.proxy_origin,
+            {'username': 'fixture', 'password': 'a valid fixture passphrase'},
+        )
+        self.assertEqual(status, 200)
+        self.assertIn('; Secure', proxy_headers['Set-Cookie'])
+        proxy_cookie = proxy_headers['Set-Cookie'].split(';')[0]
+        csrf = proxy_login['csrf_token']
+        self.assertTrue(self.request('GET', '/api/session', 'dashboard.example:8443', cookie=proxy_cookie)[1]['authenticated'])
+        event = {'title':'Proxy date','start':'2026-09-09','end':'2026-09-10','all_day':True,'category':'occasion'}
+        self.assertEqual(
+            self.request('POST', '/api/events', 'dashboard.example:8443', self.proxy_origin, event, proxy_cookie)[0],
+            403,
+        )
+        self.assertEqual(
+            self.request('POST', '/api/events', 'dashboard.example:8443', self.proxy_origin, event, proxy_cookie, csrf)[0],
+            201,
+        )
+        self.assertEqual(self.request('GET', '/api/dashboard', 'dashboard.example:8443', cookie=proxy_cookie)[0], 200)
+        self.assertEqual(self.request('GET', '/api/session', 'unconfigured.example:8443', cookie=proxy_cookie)[0], 403)
+
+    def test_proxy_origin_cli_and_validation_are_explicit(self):
+        args = build_parser().parse_args(['serve', '--proxy-origin', 'https://dashboard.example:8443'])
+        self.assertEqual(args.proxy_origins, ['https://dashboard.example:8443'])
+        with self.assertRaisesRegex(ValueError, 'loopback'):
+            server.make_server(
+                host='0.0.0.0', port=0, config_path=self.config, collect=False,
+                certfile=Path(self.tmp.name)/'cert', keyfile=Path(self.tmp.name)/'key',
+                origins=['https://native.example:8765'], proxy_origins=['https://dashboard.example'],
+            )
+        for origin in (
+            'http://dashboard.example:8443', 'https://user@dashboard.example:8443',
+            'https://@dashboard.example:8443', 'https://:secret@dashboard.example:8443',
+            'https://dashboard.example:8443/', 'https://dashboard.example:',
+            'https://dashboard.example:0', 'https://dashboard.example:70000', None,
+        ):
+            with self.subTest(origin=origin):
+                with self.assertRaises(ValueError):
+                    server.make_server(port=0, config_path=self.config, collect=False, proxy_origins=[origin])
+        allowed = server.make_server(
+            port=0, config_path=self.config, collect=False,
+            proxy_origins=['https://dashboard.example'],
+        )
+        allowed.server_close()
 
 
 class TLSAndConcurrencyTests(unittest.TestCase):

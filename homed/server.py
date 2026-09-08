@@ -247,8 +247,9 @@ def make_handler(config_path=None):
                 return ''
 
         def _cookie(self,token,clear=False):
+            secure = self.server.secure or self.headers.get('Host', '') in self.server.proxy_hosts
             return ('homed_session='+token+'; Path=/; HttpOnly; SameSite=Strict; Max-Age='+('0' if clear else '604800')+
-                    ('; Secure' if self.server.secure else ''))
+                    ('; Secure' if secure else ''))
 
         def _json(self,status,payload,headers=None):
             self._send(status,json.dumps(payload).encode(),'application/json; charset=utf-8',headers)
@@ -272,12 +273,44 @@ def make_handler(config_path=None):
     return DashboardHandler
 
 
+def _proxy_origin_set(origins):
+    result = set(origins or [])
+    for origin in result:
+        if not isinstance(origin, str):
+            raise ValueError('Proxy origins must be exact HTTPS origins with a valid port')
+        try:
+            parsed = urlsplit(origin)
+            port = parsed.port
+        except (TypeError, ValueError):
+            raise ValueError('Proxy origins must be exact HTTPS origins with a valid port') from None
+        if (
+            parsed.scheme != 'https'
+            or not parsed.hostname
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.netloc.endswith(':')
+            or port == 0
+            or '?' in origin
+            or '#' in origin
+            or any(character.isspace() for character in origin)
+        ):
+            raise ValueError('Proxy origins must be exact HTTPS origins with a valid port')
+    return result
+
+
 def make_server(host=DEFAULT_HOST,port=DEFAULT_PORT,config_path=None,state_dir=None,
-                origins=None,certfile=None,keyfile=None,collect=True,max_connections=32):
+                origins=None,certfile=None,keyfile=None,collect=True,max_connections=32,
+                proxy_origins=None):
     config_path = Path(config_path or config_mod.config_path())
     state_dir = Path(state_dir or config_path.parent/'dashboard')
     secure = bool(certfile and keyfile)
     loopback = host in ('127.0.0.1','localhost','::1')
+    proxy_origins = _proxy_origin_set(proxy_origins)
+    if proxy_origins and not loopback:
+        raise ValueError('Proxy origins require a loopback native listener')
     if bool(certfile) != bool(keyfile):
         raise ValueError('Both TLS certificate and key are required')
     if not loopback and (not secure or not origins):
@@ -286,11 +319,14 @@ def make_server(host=DEFAULT_HOST,port=DEFAULT_PORT,config_path=None,state_dir=N
     try:
         httpd.secure = secure
         scheme = 'https' if secure else 'http'
-        httpd.origins = set(origins or [f'{scheme}://127.0.0.1:{httpd.server_address[1]}',f'{scheme}://localhost:{httpd.server_address[1]}'])
-        for origin in httpd.origins:
+        native_origins = set(origins or [f'{scheme}://127.0.0.1:{httpd.server_address[1]}',f'{scheme}://localhost:{httpd.server_address[1]}'])
+        for origin in native_origins:
             parsed = urlsplit(origin)
             if parsed.scheme != scheme or not parsed.hostname or parsed.path or parsed.query or parsed.fragment or parsed.username:
                 raise ValueError('Origins must exactly match the serving scheme and host, without a path')
+        httpd.proxy_origins = proxy_origins
+        httpd.proxy_hosts = {urlsplit(origin).netloc for origin in proxy_origins}
+        httpd.origins = native_origins | proxy_origins
         httpd.allowed_hosts = {urlsplit(origin).netloc for origin in httpd.origins}
         httpd.allowed_networks = [ipaddress.ip_network(n) for n in ('127.0.0.0/8','10.0.0.0/8','172.16.0.0/12','192.168.0.0/16','100.64.0.0/10','::1/128','fd7a:115c:a1e0::/48')]
         if secure:
@@ -310,8 +346,11 @@ def make_server(host=DEFAULT_HOST,port=DEFAULT_PORT,config_path=None,state_dir=N
 
 
 def serve(host=DEFAULT_HOST,port=DEFAULT_PORT,config_path=None,open_browser=False,
-          state_dir=None,origins=None,certfile=None,keyfile=None):
-    httpd = make_server(host,port,config_path,state_dir,origins,certfile,keyfile)
+          state_dir=None,origins=None,certfile=None,keyfile=None,proxy_origins=None):
+    httpd = make_server(
+        host, port, config_path, state_dir, origins, certfile, keyfile,
+        proxy_origins=proxy_origins,
+    )
     url = sorted(httpd.origins)[0]
     print(f'homed private dashboard on {url}')
     if not httpd.app.auth.has_accounts():
