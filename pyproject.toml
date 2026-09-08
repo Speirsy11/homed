@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Charlie Speirs" }]
-dependencies = []
+dependencies = ["cryptography==50.0.1", "python-dateutil==2.9.0.post0"]
 
 [project.scripts]
 homed = "homed.cli:main"
@@ -19,4 +19,4 @@ homed = "homed.cli:main"
 include = ["homed*"]
 
 [tool.setuptools.package-data]
-homed = ["web/*.html", "web/*.css", "web/*.js"]
+homed = ["web/*.html", "web/*.css", "web/*.js", "web/vendor/*"]

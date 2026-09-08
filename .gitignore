@@ -2,7 +2,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
-.venv/
+.venv*/
 venv/
 build/
 dist/
@@ -12,3 +12,8 @@ dist/
 services.yaml
 services.local.yaml
 .homed/
+dashboard/
+*.sqlite3
+*.sqlite3-*
+*.pem
+*.key

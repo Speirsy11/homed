@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -25,6 +26,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     except config.ConfigError as exc:
         print(f"config error: {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"dashboard error: {exc}", file=sys.stderr)
         return 2
 
 
@@ -65,10 +69,21 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--force", action="store_true")
     init.set_defaults(func=cmd_init)
 
-    serve = sub.add_parser("serve", help="run the read-only local dashboard")
+    account = sub.add_parser("account", help="set up a private dashboard account")
+    account_sub = account.add_subparsers(dest="account_command", required=True)
+    create = account_sub.add_parser("create", help="create a local dashboard administrator")
+    create.add_argument("username")
+    create.add_argument("--state-dir", type=Path)
+    create.set_defaults(func=cmd_account_create)
+
+    serve = sub.add_parser("serve", help="run the private dashboard and personal calendar")
     serve.add_argument("--host", default=None, help="bind host (default 127.0.0.1; loopback-only)")
     serve.add_argument("--port", type=int, default=None, help="bind port (default 8765)")
     serve.add_argument("--open", action="store_true", dest="open_browser", help="open a browser window")
+    serve.add_argument("--state-dir", type=Path, help="private databases (default: dashboard/ beside the registry)")
+    serve.add_argument("--origin", action="append", dest="origins", help="exact permitted browser origin, e.g. https://host:8765; repeat for LAN/Tailscale")
+    serve.add_argument("--cert", type=Path, dest="certfile", help="TLS certificate; required beyond loopback")
+    serve.add_argument("--key", type=Path, dest="keyfile", help="TLS private key")
     serve.set_defaults(func=cmd_serve)
     return parser
 
@@ -179,7 +194,22 @@ def cmd_serve(args: argparse.Namespace) -> int:
         port=args.port or server.DEFAULT_PORT,
         config_path=_path(args),
         open_browser=args.open_browser,
+        state_dir=args.state_dir,
+        origins=args.origins,
+        certfile=args.certfile,
+        keyfile=args.keyfile,
     )
+
+
+def cmd_account_create(args: argparse.Namespace) -> int:
+    from .auth import AuthStore
+    password = getpass.getpass("New dashboard passphrase (at least 14 characters): ")
+    if password != getpass.getpass("Repeat passphrase: "):
+        raise ValueError("Passphrases do not match")
+    state_dir = args.state_dir or _path(args).parent / "dashboard"
+    AuthStore(state_dir / "auth.sqlite3").create_account(args.username, password)
+    print(f"Created dashboard administrator {args.username}. Calendar records are private to this account.")
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover

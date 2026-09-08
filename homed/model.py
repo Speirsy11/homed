@@ -155,6 +155,7 @@ class Service:
     name: str
     driver: Driver
     description: str = ""
+    web_url: Optional[str] = None
     intent: Intent = Intent.MANUAL
     exposure: Exposure = Exposure.LOOPBACK
     health: HealthCheck = field(default_factory=HealthCheck)
@@ -171,6 +172,7 @@ class Service:
             "name": self.name,
             "driver": self.driver.value,
             "description": self.description,
+            "web_url": self.web_url,
             "intent": self.intent.value,
             "exposure": self.exposure.value,
             "health": self.health.to_dict(),

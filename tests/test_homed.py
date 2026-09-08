@@ -242,7 +242,13 @@ class ServerRouteTests(unittest.TestCase):
             "services:\n  svc:\n    driver: manual\n    intent: external\n",
             encoding="utf-8",
         )
-        self.httpd = server.make_server(host="127.0.0.1", port=0, config_path=path)
+        self.httpd = server.make_server(host="127.0.0.1", port=0, config_path=path, collect=False)
+        self.httpd.app.observations.storage_paths = []
+        self.httpd.app.observations.collect_once()
+        self.httpd.app.auth.create_account("tester", "fixture dashboard passphrase")
+        login = self.httpd.app.auth.login("tester", "fixture dashboard passphrase", "fixture")
+        self.cookie = "homed_session=" + login["token"]
+        self.csrf = login["csrf_token"]
         self.port = self.httpd.server_address[1]
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
@@ -254,7 +260,8 @@ class ServerRouteTests(unittest.TestCase):
         self._tmp.cleanup()
 
     def _get(self, route):
-        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}{route}", timeout=5) as resp:
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}{route}", headers={"Cookie": self.cookie})
+        with urllib.request.urlopen(request, timeout=5) as resp:
             return resp.status, resp.read(), resp.headers.get("Content-Type", "")
 
     def test_index_served(self):
@@ -278,14 +285,17 @@ class ServerRouteTests(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             self._get("/nope")
         self.assertEqual(ctx.exception.code, 404)
+        ctx.exception.close()
 
     def test_post_rejected(self):
         req = urllib.request.Request(
-            f"http://127.0.0.1:{self.port}/api/status", data=b"{}", method="POST"
+            f"http://127.0.0.1:{self.port}/api/status", data=b"{}", method="POST",
+            headers={"Cookie":self.cookie, "Origin":f"http://127.0.0.1:{self.port}", "X-CSRF-Token":self.csrf}
         )
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             urllib.request.urlopen(req, timeout=5)
         self.assertEqual(ctx.exception.code, 405)
+        ctx.exception.close()
 
 
 if __name__ == "__main__":
