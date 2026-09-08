@@ -13,4 +13,3 @@ def private_database(path):
     os.fchmod(fd, 0o600)
     os.close(fd)
     return path
-
